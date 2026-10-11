@@ -12,3 +12,6 @@ RUN comfy-node-install comfyui-frame-interpolation
 # schlägt das fehl, lädt der Knoten beim ersten Lauf nach – der Build bricht deshalb nicht ab.
 RUN cd /comfyui && python -c "import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'custom_nodes/comfyui-frame-interpolation'); from vfi_utils import load_file_from_github_release as l; print(l('rife', 'rife47.pth'))" || echo "RIFE-Gewichte werden zur Laufzeit geladen"
 RUN ls -la /comfyui/custom_nodes/comfyui-frame-interpolation/ckpts/rife 2>/dev/null || true
+
+# studio-Knoten: Video von URL laden (große Eingaben jenseits der 10-MiB-Grenze von /run)
+COPY studio_knoten /comfyui/custom_nodes/studio_knoten
