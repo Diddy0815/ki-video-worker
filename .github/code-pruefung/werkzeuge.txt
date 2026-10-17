@@ -1,0 +1,6 @@
+# Werkzeuge der Prüfpipeline (GitHub Action „Code-Prüfung“), feste Versionen — gleich wie am PC (%USERPROFILE%\.codepruefung).
+# Neue Version: hier und in der README eintragen, am PC nachziehen, dann neu ausrollen.
+pysonar==1.9.0.5762
+bandit==1.9.4
+semgrep==1.179.0
+pip-audit==2.10.1

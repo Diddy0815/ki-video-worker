@@ -1,0 +1,30 @@
+# Eigene Pysa-Modelle für FastAPI/Starlette (Code-Prüfung, Repo Diddy0815/sonarqube — Versuch).
+#
+# Ergänzt die mit pyre-check gelieferten Modelle (third_party_taint/fastapi_models.pysa), die Routen nur
+# erkennen, wenn der Decorator auf fastapi.FastAPI/APIRouter aufgelöst werden kann:
+#   1. Parameter von Routen-Funktionen gelten als vom Nutzer gesteuert (UserControlled) — auch wenn der
+#      Decorator nur am Namen erkennbar ist (@app.get, @router.post, @api.api_route …).
+#   2. Was aus dem Request-Objekt gelesen wird (Body, JSON, Formular, Query, Pfad, Header, Cookies, URL),
+#      ebenfalls.
+# Die Senken (Shell, SQL, Dateisystem, SSRF …) liefert pyre-check selbst.
+
+ModelQuery(
+  name = "code_pruefung_fastapi_routen",
+  find = "functions",
+  where = Decorator(name.matches(r"\.(get|post|put|delete|patch|head|options|api_route|websocket)$")),
+  model = [
+    Parameters(TaintSource[UserControlled])
+  ]
+)
+
+ModelQuery(
+  name = "code_pruefung_request_lesen",
+  find = "methods",
+  where = [
+    cls.fully_qualified_name.matches(r"^starlette\.requests\.(Request|HTTPConnection)$"),
+    name.matches(r"^(json|body|form|stream|query_params|path_params|headers|cookies|url)$")
+  ],
+  model = [
+    Returns(TaintSource[UserControlled])
+  ]
+)

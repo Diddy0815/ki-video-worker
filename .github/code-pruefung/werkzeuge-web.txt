@@ -1,0 +1,5 @@
+# Pysa (Taint-Analyse) nur im Profil web, nur in der GitHub Action (Linux) — in eine eigene venv
+# ($RUNNER_TEMP/pysa-venv), weil pyre-check eine ältere click-Version verlangt als Semgrep.
+# fastapi, damit Pysa Routen-Decorators und Request-Objekte auflösen kann.
+pyre-check==0.10.0
+fastapi

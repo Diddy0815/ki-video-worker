@@ -1,0 +1,75 @@
+# Code-Prüfung mit SonarQube (https://sonar.816.at) — ausgerollt aus dem Repo Diddy0815/sonarqube (ausrollen.py).
+# Bei jedem Push auf den Standardzweig läuft die Prüfpipeline (.github/code-pruefung/pruefpipeline.py): Bandit, Semgrep,
+# pip-audit und im Profil web zusätzlich Pysa, danach der SonarQube-Scanner mit allen Berichten; der Lauf wartet, bis
+# SonarQube die Analyse verarbeitet hat. Die Verwaltung (Reiter „Code-Prüfung“) bekommt das Ergebnis per Webhook.
+# Nicht hier ändern, sondern in der Vorlage
+# vorlagen/code-pruefung.yml bzw. vorlagen/code-pruefung/ und neu ausrollen.
+name: Code-Prüfung
+
+on:
+  push:
+    branches:
+      - main
+    # Reine Text- und Doku-Änderungen lösen keinen Scan aus (spart Action-Minuten). docs/ und wiki/ stehen
+    # deshalb auch in sonar.exclusions — sonst blieben Befunde dort nach einem reinen Doku-Push offen.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "wiki/**"
+      - "*.txt"
+  workflow_dispatch:
+
+# Je Zweig höchstens ein Scan; ein neuer Push bricht den laufenden ab.
+concurrency:
+  group: code-pruefung-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube:
+    name: Prüfpipeline und SonarQube-Scan
+    runs-on: ubuntu-latest
+    # Profil desktop 30 Minuten, Profil web 45 (Pysa braucht deutlich länger). Abgerechnet wird nur die echte
+    # Laufzeit; die Pipeline teilt sich SQ_BUDGET Sekunden ein (5 Minuten weniger, für Einrichten und Installieren),
+    # damit ein hängendes Werkzeug nie den Scanner verdrängt.
+    timeout-minutes: 30
+    env:
+      SQ_KEY: ki_video_worker
+      SQ_NAME: "ki_video_worker"
+      SQ_PROFIL: desktop
+      SQ_BUDGET: 1500
+    steps:
+      - name: Code holen (volle Historie, damit die Befunde den Commits zugeordnet werden)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Python 3.12 einrichten (mit pip-Cache)
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/code-pruefung/werkzeuge*.txt
+
+      - name: Werkzeuge installieren (pysonar, Bandit, Semgrep, pip-audit; im Profil web Pysa)
+        run: |
+          python -m pip install --disable-pip-version-check -q -r .github/code-pruefung/werkzeuge.txt
+          if [ "$SQ_PROFIL" = "web" ]; then
+            # Pysa in eine eigene venv: pyre-check verlangt eine ältere click-Version als Semgrep.
+            ( python -m venv "$RUNNER_TEMP/pysa-venv" \
+              && "$RUNNER_TEMP/pysa-venv/bin/python" -m pip install --disable-pip-version-check -q \
+                   -r .github/code-pruefung/werkzeuge-web.txt ) \
+              || echo "::warning title=Prüfpipeline::Pysa ließ sich nicht installieren — wird übersprungen"
+          fi
+
+      # --warten: erst fertig, wenn SonarQube die Analyse verarbeitet hat — scheitert die Verarbeitung am Server
+      # (z. B. Speicher), wird der Lauf rot, statt still den alten Stand stehen zu lassen.
+      - name: Prüfpipeline und SonarQube-Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonar.816.at
+        run: >-
+          python .github/code-pruefung/pruefpipeline.py --key "$SQ_KEY" --name "$SQ_NAME" --profil "$SQ_PROFIL"
+          --warten --zeitbudget "$SQ_BUDGET"
